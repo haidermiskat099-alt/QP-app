@@ -1,0 +1,6 @@
+{
+  "name": "QP COMMUNITY",
+  "description": "Ultra-premium Question Practice Community mobile app with Dark Red-Purple Glassmorphism, Live Quiz Engine, Secret Admin Studio, and AI-Powered Top 5 Leaderboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
