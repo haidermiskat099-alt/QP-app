@@ -15,16 +15,16 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      - name: Grant execute permission for gradlew
+        run: |
+          GRADLEW_PATH=$(find . -name gradlew -type f | head -n 1)
+          chmod +x "$GRADLEW_PATH"
+
       - name: Build Android APK
         run: |
-          if [ -d "QP-app-main/android" ]; then
-            cd QP-app-main/android
-          elif [ -d "android" ]; then
-            cd android
-          else
-            cd QP-app/QP-app-main/android
-          fi
-          chmod +x gradlew
+          GRADLEW_PATH=$(find . -name gradlew -type f | head -n 1)
+          GRADLE_DIR=$(dirname "$GRADLEW_PATH")
+          cd "$GRADLE_DIR"
           ./gradlew assembleDebug
 
       - name: Upload APK
