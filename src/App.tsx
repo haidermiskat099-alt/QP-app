@@ -1,9 +1,13 @@
+
 import React, { useState, useEffect } from 'react';
 import { AuraBackground } from './components/AuraBackground';
 import { MobileFrameWrapper } from './components/MobileFrameWrapper';
 import { TopStatusBar } from './components/TopStatusBar';
 import { BottomTabBar, TabType } from './components/BottomTabBar';
-import { BroadcastNotificationToast, BroadcastDrawerModal } from './components/BroadcastNotificationToast';
+import {
+  BroadcastNotificationToast,
+  BroadcastDrawerModal,
+} from './components/BroadcastNotificationToast';
 import { AuthModal } from './components/AuthModal';
 import { HomeFeed } from './components/HomeFeed';
 import { AdminPanel } from './components/AdminPanel';
@@ -15,54 +19,65 @@ import { SplashScreen } from './components/SplashScreen';
 import { YouTubeEducationalCorner } from './components/YouTubeEducationalCorner';
 import { CommunityChat } from './components/CommunityChat';
 
-import { 
-  User, 
-  Quiz, 
-  BroadcastAnnouncement, 
-  LeaderboardUser, 
-  QuizResult 
+import {
+  User,
+  Quiz,
+  BroadcastAnnouncement,
+  LeaderboardUser,
+  QuizResult,
 } from './types';
-import { 
-  AUTHORIZED_ADMINS, 
-  INITIAL_QUIZZES, 
-  INITIAL_ANNOUNCEMENTS, 
-  INITIAL_LEADERBOARD_TOP5 
+
+import {
+  INITIAL_QUIZZES,
+  INITIAL_ANNOUNCEMENTS,
+  INITIAL_LEADERBOARD_TOP5,
 } from './data/initialData';
+
 import { sounds } from './utils/audio';
 
 export default function App() {
-  // Splash Screen Intro State (true on launch)
+  // Splash Screen Intro State
   const [showSplash, setShowSplash] = useState<boolean>(true);
 
-  // Application State
-  const [currentUser, setCurrentUser] = useState<User | null>(AUTHORIZED_ADMINS[0]); // Starts with Owner Haider active for instant review
+  // Start logged out. Authentication is handled by the backend login modal.
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+
   const [activeTab, setActiveTab] = useState<TabType>('home');
   const [quizzes, setQuizzes] = useState<Quiz[]>(INITIAL_QUIZZES);
-  const [announcements, setAnnouncements] = useState<BroadcastAnnouncement[]>(INITIAL_ANNOUNCEMENTS);
-  const [activeToastAnnouncement, setActiveToastAnnouncement] = useState<BroadcastAnnouncement | null>(null);
-  const [leaderboard, setLeaderboard] = useState<LeaderboardUser[]>(INITIAL_LEADERBOARD_TOP5);
+  const [announcements, setAnnouncements] =
+    useState<BroadcastAnnouncement[]>(INITIAL_ANNOUNCEMENTS);
+  const [activeToastAnnouncement, setActiveToastAnnouncement] =
+    useState<BroadcastAnnouncement | null>(null);
+  const [leaderboard, setLeaderboard] =
+    useState<LeaderboardUser[]>(INITIAL_LEADERBOARD_TOP5);
   const [recentQuizResults, setRecentQuizResults] = useState<QuizResult[]>([]);
 
-  // Modals State
+  // Modal State
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
-  const [isAnnouncementsDrawerOpen, setIsAnnouncementsDrawerOpen] = useState<boolean>(false);
+  const [isAnnouncementsDrawerOpen, setIsAnnouncementsDrawerOpen] =
+    useState<boolean>(false);
   const [isQuizCreatorOpen, setIsQuizCreatorOpen] = useState<boolean>(false);
 
-  // Active Quiz Play State
-  const [activeQuizForStudent, setActiveQuizForStudent] = useState<Quiz | null>(null);
+  // Active Quiz State
+  const [activeQuizForStudent, setActiveQuizForStudent] =
+    useState<Quiz | null>(null);
 
-  // Automatic Background Auto-Scheduler Heartbeat:
-  // Automatically triggers and runs live quizzes precisely at their scheduled timestamp without manual intervention
+  // Automatic scheduled quiz heartbeat
   useEffect(() => {
     const schedulerInterval = setInterval(() => {
       const now = Date.now();
+
       setQuizzes((prevQuizzes) => {
         let hasStateChange = false;
+
         const updated = prevQuizzes.map((quiz) => {
-          if (!quiz.isLive && new Date(quiz.scheduledAt).getTime() <= now) {
+          if (
+            !quiz.isLive &&
+            new Date(quiz.scheduledAt).getTime() <= now
+          ) {
             hasStateChange = true;
-            // Fire official automated broadcast siren alert
+
             const autoSiren: BroadcastAnnouncement = {
               id: 'bc_auto_' + Date.now() + '_' + quiz.id,
               title: `🔥 AUTO-TRIGGERED LIVE QUIZ: "${quiz.title}"`,
@@ -76,7 +91,7 @@ export default function App() {
 
             sounds.playBroadcastNotification();
             setActiveToastAnnouncement(autoSiren);
-            setAnnouncements((prevAnnouncements) => [autoSiren, ...prevAnnouncements]);
+            setAnnouncements((prev) => [autoSiren, ...prev]);
 
             return {
               ...quiz,
@@ -84,6 +99,7 @@ export default function App() {
               status: 'live' as const,
             };
           }
+
           return quiz;
         });
 
@@ -94,21 +110,27 @@ export default function App() {
     return () => clearInterval(schedulerInterval);
   }, []);
 
-  // Handlers
+  // Open authentication modal
   const handleOpenAuth = (mode: 'login' | 'signup' = 'login') => {
     setAuthMode(mode);
     setIsAuthModalOpen(true);
   };
 
+  // Called after the backend accepts login/signup
   const handleLoginSuccess = (user: User) => {
     setCurrentUser(user);
+
     if (user.role !== 'admin' && activeTab === 'admin') {
       setActiveTab('home');
     }
   };
 
+  // Clear the local login session on logout
   const handleLogout = () => {
+    sessionStorage.removeItem('qp_access_token');
     setCurrentUser(null);
+    setActiveQuizForStudent(null);
+
     if (activeTab === 'admin') {
       setActiveTab('home');
     }
@@ -121,21 +143,24 @@ export default function App() {
 
   const handleSaveCreatedQuiz = (newQuiz: Quiz) => {
     setQuizzes((prev) => [newQuiz, ...prev]);
+
     const siren: BroadcastAnnouncement = {
       id: 'bc_' + Date.now(),
       title: `⚡ New Quiz Scheduled: "${newQuiz.title}"`,
       message: `${newQuiz.questions.length} questions, ${newQuiz.timeLimitPerQuestionSeconds}s pace with -${newQuiz.negativeMarking} penalty. Go to Quizzes!`,
       urgency: 'live_event',
       createdAt: 'Just now',
-      authorName: currentUser?.fullName || 'Haider',
-      authorRole: currentUser?.adminTitle || 'Owner',
+      authorName: currentUser?.fullName || 'QP Community',
+      authorRole: currentUser?.adminTitle || 'Administrator',
       active: true,
     };
+
     handleSendBroadcast(siren);
   };
 
   const handleSaveImportedQuiz = (newQuiz: Quiz) => {
     setQuizzes((prev) => [newQuiz, ...prev]);
+
     if (newQuiz.isLive) {
       const siren: BroadcastAnnouncement = {
         id: 'bc_' + Date.now(),
@@ -143,47 +168,61 @@ export default function App() {
         message: `${newQuiz.questions.length} questions live now! Jump in and test your speed.`,
         urgency: 'live_event',
         createdAt: 'Just now',
-        authorName: currentUser?.fullName || 'Haider',
-        authorRole: currentUser?.adminTitle || 'Owner',
+        authorName: currentUser?.fullName || 'QP Community',
+        authorRole: currentUser?.adminTitle || 'Administrator',
         active: true,
       };
+
       handleSendBroadcast(siren);
     } else {
-      const scheduledStr = new Date(newQuiz.scheduledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const scheduledStr = new Date(newQuiz.scheduledAt).toLocaleTimeString(
+        [],
+        { hour: '2-digit', minute: '2-digit' }
+      );
+
       const siren: BroadcastAnnouncement = {
         id: 'bc_' + Date.now(),
         title: `⏰ Auto-Scheduled Quiz: "${newQuiz.title}"`,
         message: `Set for auto-trigger at ${scheduledStr}. Will go live automatically!`,
         urgency: 'academic',
         createdAt: 'Just now',
-        authorName: currentUser?.fullName || 'Haider',
-        authorRole: currentUser?.adminTitle || 'Owner',
+        authorName: currentUser?.fullName || 'QP Community',
+        authorRole: currentUser?.adminTitle || 'Administrator',
         active: true,
       };
+
       handleSendBroadcast(siren);
     }
   };
 
   const handleDeleteQuiz = (quizId: string) => {
-    setQuizzes((prev) => prev.filter((q) => q.id !== quizId));
+    setQuizzes((prev) => prev.filter((quiz) => quiz.id !== quizId));
   };
 
   const handleLaunchQuizImmediately = (quizId: string) => {
     setQuizzes((prev) =>
-      prev.map((q) => (q.id === quizId ? { ...q, isLive: true, status: 'live' } : q))
+      prev.map((quiz) =>
+        quiz.id === quizId
+          ? { ...quiz, isLive: true, status: 'live' }
+          : quiz
+      )
     );
-    const target = quizzes.find((q) => q.id === quizId);
+
+    const target = quizzes.find((quiz) => quiz.id === quizId);
+
     if (target) {
       const siren: BroadcastAnnouncement = {
         id: 'bc_' + Date.now(),
         title: `🔥 Quiz Now LIVE: "${target.title}"`,
-        message: 'The examination controller has launched the live battle! Tap Quizzes to participate.',
+        message:
+          'The examination controller has launched the live battle! Tap Quizzes to participate.',
         urgency: 'live_event',
         createdAt: 'Just now',
-        authorName: currentUser?.fullName || 'Haider',
-        authorRole: currentUser?.adminTitle || 'Owner',
+        authorName: currentUser?.fullName || 'QP Community',
+        authorRole: currentUser?.adminTitle || 'Administrator',
         active: true,
       };
+
       handleSendBroadcast(siren);
     }
   };
@@ -201,10 +240,15 @@ export default function App() {
     setRecentQuizResults((prev) => [result, ...prev]);
 
     if (currentUser) {
-      const newPoints = currentUser.points + Math.round(result.score * 100);
       const newQuizzesCount = currentUser.quizzesAttempted + 1;
+      const newPoints = currentUser.points + Math.round(result.score * 100);
+
       const updatedAccuracy = parseFloat(
-        ((currentUser.accuracy * currentUser.quizzesAttempted + result.accuracy) / newQuizzesCount).toFixed(1)
+        (
+          (currentUser.accuracy * currentUser.quizzesAttempted +
+            result.accuracy) /
+          newQuizzesCount
+        ).toFixed(1)
       );
 
       setCurrentUser((prev) =>
@@ -221,7 +265,11 @@ export default function App() {
   };
 
   const handleStartQuizOnTopic = (category: string) => {
-    const matched = quizzes.find((q) => q.category.toLowerCase().includes(category.toLowerCase())) || quizzes[0];
+    const matched =
+      quizzes.find((quiz) =>
+        quiz.category.toLowerCase().includes(category.toLowerCase())
+      ) || quizzes[0];
+
     if (matched) {
       handleStartQuiz(matched);
     }
@@ -231,20 +279,22 @@ export default function App() {
 
   return (
     <div className="relative min-h-screen bg-[#0D021A] text-slate-100 font-sans">
-      {/* Splash Screen Intro Animation */}
       {showSplash && (
         <SplashScreen onFinish={() => setShowSplash(false)} />
       )}
 
-      {/* Dark Red-Purple Glassmorphism Aura Background */}
       <AuraBackground />
 
-      {/* Mobile Simulation Frame / Responsive Canvas Wrapper */}
       <MobileFrameWrapper
-        isAdmin={isAdmin}
-        onAdminClick={() => setActiveTab('admin')}
+        isAdmin={Boolean(isAdmin)}
+        onAdminClick={() => {
+          if (isAdmin) {
+            setActiveTab('admin');
+          } else {
+            handleOpenAuth('login');
+          }
+        }}
       >
-        {/* Real-time Broadcast Push Notification Toast */}
         <BroadcastNotificationToast
           announcement={activeToastAnnouncement}
           onDismiss={() => setActiveToastAnnouncement(null)}
@@ -254,7 +304,6 @@ export default function App() {
           }}
         />
 
-        {/* Top Mobile Status Bar (Clock, Telephony, Brand, Bell, Profile, Replay Splash) */}
         <TopStatusBar
           user={currentUser}
           announcements={announcements}
@@ -264,10 +313,8 @@ export default function App() {
           onReplaySplash={() => setShowSplash(true)}
         />
 
-        {/* Active Content Body Router */}
         <div className="flex-1 flex flex-col overflow-hidden relative">
           {activeQuizForStudent ? (
-            /* Student Practice Zone ("Participate in Quiz") */
             <StudentPracticeZone
               quiz={activeQuizForStudent}
               currentUser={currentUser}
@@ -275,7 +322,6 @@ export default function App() {
               onSaveQuizResult={handleSaveQuizResult}
             />
           ) : activeTab === 'home' ? (
-            /* Home Feed with Live Quizzes & Scheduled Queue */
             <HomeFeed
               quizzes={quizzes}
               announcements={announcements}
@@ -286,42 +332,53 @@ export default function App() {
               onOpenLeaderboard={() => setActiveTab('leaderboard')}
             />
           ) : activeTab === 'practice' ? (
-            /* Instant Practice Engine / Drill Selector */
             <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 animate-fadeIn">
               <div className="p-4 rounded-3xl glass-panel-glow border border-purple-500/35">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-[#FF0055] bg-red-950/60 px-2 py-0.5 rounded border border-[#FF0055]/30">
                   Sprint Drill Zone
                 </span>
+
                 <h2 className="font-display font-black text-xl text-white mt-1">
                   Speed Question Practice
                 </h2>
+
                 <p className="text-xs text-purple-200 mt-1">
-                  Choose a drill module below to test with active circular countdown clocks & negative marks.
+                  Choose a drill module below to test with active circular
+                  countdown clocks & negative marks.
                 </p>
               </div>
 
               <div className="space-y-3">
-                {quizzes.map((q) => (
+                {quizzes.map((quiz) => (
                   <div
-                    key={q.id}
+                    key={quiz.id}
                     className="p-4 rounded-2xl glass-panel border border-purple-500/25 hover:border-[#FF0055]/60 transition-all space-y-2.5"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <span className="text-[10px] font-semibold text-purple-300 uppercase">
-                          {q.category}
+                          {quiz.category}
                         </span>
-                        <h4 className="text-sm font-bold text-white mt-0.5">{q.title}</h4>
+
+                        <h4 className="text-sm font-bold text-white mt-0.5">
+                          {quiz.title}
+                        </h4>
                       </div>
+
                       <span className="text-xs font-mono font-bold text-[#FF0055] px-2 py-0.5 rounded bg-red-950/60 border border-[#FF0055]/30">
-                        {q.timeLimitPerQuestionSeconds}s/Q
+                        {quiz.timeLimitPerQuestionSeconds}s/Q
                       </span>
                     </div>
 
                     <div className="flex items-center justify-between text-[11px] text-slate-400 pt-2 border-t border-purple-500/15">
-                      <span>{q.questions.length} MCQs · -{q.negativeMarking} Penalty</span>
+                      <span>
+                        {quiz.questions.length} MCQs · -{quiz.negativeMarking}{' '}
+                        Penalty
+                      </span>
+
                       <button
-                        onClick={() => handleStartQuiz(q)}
+                        type="button"
+                        onClick={() => handleStartQuiz(quiz)}
                         className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-[#FF0055] to-[#8A2BE2] text-white text-xs font-bold shadow-[0_0_10px_rgba(255,0,85,0.4)] hover:shadow-[0_0_15px_rgba(255,0,85,0.7)] cursor-pointer"
                       >
                         Start Drill
@@ -332,67 +389,79 @@ export default function App() {
               </div>
             </div>
           ) : activeTab === 'chat' ? (
-            /* Unified Single Community Chat */
             <CommunityChat
               currentUser={currentUser}
               onOpenAuth={() => handleOpenAuth('login')}
             />
           ) : activeTab === 'youtube' ? (
-            /* In-App YouTube Educational Corner */
             <YouTubeEducationalCorner
               onStartQuizOnTopic={handleStartQuizOnTopic}
             />
           ) : activeTab === 'leaderboard' ? (
-            /* AI-Powered Dynamic Top 5 Leaderboard */
             <TopLeaderboard
               leaderboardData={leaderboard}
-              onChallengePerformer={(performer) => {
-                if (quizzes.length > 0) handleStartQuiz(quizzes[0]);
+              onChallengePerformer={() => {
+                if (quizzes.length > 0) {
+                  handleStartQuiz(quizzes[0]);
+                }
               }}
             />
           ) : activeTab === 'admin' ? (
-            /* Secret Admin Panel with Bulk Import & Auto-Scheduling */
             <AdminPanel
               currentUser={currentUser}
-              onLoginAsAdmin={(admin) => setCurrentUser(admin)}
+              onLoginAsAdmin={handleLoginSuccess}
               onSendBroadcast={handleSendBroadcast}
-              onOpenQuizCreator={() => setIsQuizCreatorOpen(true)}
+              onOpenQuizCreator={() => {
+                if (currentUser?.role === 'admin') {
+                  setIsQuizCreatorOpen(true);
+                } else {
+                  handleOpenAuth('login');
+                }
+              }}
               quizzes={quizzes}
               onLaunchQuizImmediately={handleLaunchQuizImmediately}
               onSaveImportedQuiz={handleSaveImportedQuiz}
               onDeleteQuiz={handleDeleteQuiz}
             />
           ) : (
-            /* User Profile & Performance Stats */
             <UserProfile
               user={currentUser}
               onLogout={handleLogout}
               onOpenAuth={() => handleOpenAuth('login')}
               recentResults={recentQuizResults}
-              onOpenAdminPanel={() => setActiveTab('admin')}
+              onOpenAdminPanel={() => {
+                if (isAdmin) {
+                  setActiveTab('admin');
+                } else {
+                  handleOpenAuth('login');
+                }
+              }}
             />
           )}
         </div>
 
-        {/* Fixed Bottom Mobile Navigation Tab Bar */}
         {!activeQuizForStudent && (
           <BottomTabBar
             activeTab={activeTab}
-            onChangeTab={(tab) => setActiveTab(tab)}
-            isAdmin={isAdmin}
+            onChangeTab={(tab) => {
+              if (tab === 'admin' && !isAdmin) {
+                handleOpenAuth('login');
+                return;
+              }
+              setActiveTab(tab);
+            }}
+            isAdmin={Boolean(isAdmin)}
           />
         )}
       </MobileFrameWrapper>
 
-      {/* Broadcast Announcements History Drawer */}
       <BroadcastDrawerModal
         isOpen={isAnnouncementsDrawerOpen}
         onClose={() => setIsAnnouncementsDrawerOpen(false)}
         announcements={announcements}
       />
 
-      {/* Custom Scheduled Live Quiz Creator Studio (Single Question Mode) */}
-      {isQuizCreatorOpen && currentUser && (
+      {isQuizCreatorOpen && currentUser?.role === 'admin' && (
         <QuizCreatorModal
           isOpen={isQuizCreatorOpen}
           onClose={() => setIsQuizCreatorOpen(false)}
@@ -401,7 +470,6 @@ export default function App() {
         />
       )}
 
-      {/* Custom Authentication Modal (No OTP, phone & password, glowing inputs) */}
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
@@ -410,4 +478,5 @@ export default function App() {
       />
     </div>
   );
-}
+    }
+    
