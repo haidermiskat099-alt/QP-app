@@ -7,6 +7,9 @@ on:
       - 'QP-app/QP-app-main/**'
       - '.github/workflows/build-apk.yml'
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -14,6 +17,10 @@ jobs:
     defaults:
       run:
         working-directory: QP-app/QP-app-main
+
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
     steps:
       - name: Checkout project
@@ -23,6 +30,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+          cache-dependency-path: QP-app/QP-app-main/package-lock.json
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -30,14 +39,25 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Add Android SDK tools to PATH
+        run: |
+          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
+          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          echo "$ANDROID_HOME/build-tools/36.0.0" >> "$GITHUB_PATH"
 
       - name: Install Android SDK packages
-        run: sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+        run: |
+          sdkmanager --sdk_root="$ANDROID_HOME" "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+          yes | sdkmanager --sdk_root="$ANDROID_HOME" --licenses
+
+      - name: Verify project files
+        run: |
+          test -f package.json
+          test -f android/gradlew
+          echo "Project files found."
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Build frontend
         run: npm run build
@@ -45,11 +65,14 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
-      - name: Build APK
+      - name: Configure Android SDK path
+        run: echo "sdk.dir=$ANDROID_HOME" > android/local.properties
+
+      - name: Build debug APK
         run: |
           chmod +x android/gradlew
           cd android
-          ./gradlew --no-daemon assembleDebug
+          ./gradlew --no-daemon --stacktrace assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
